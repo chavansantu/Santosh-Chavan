@@ -1,0 +1,6 @@
+{
+  "name": "AI Journal & Reflections",
+  "description": "A secure, user-authenticated reflection and journaling web app powered by Gemini and Cloud Firestore with location-aware entries, admin RBAC, and external alerts.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
