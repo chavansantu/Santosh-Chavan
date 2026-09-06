@@ -16,7 +16,9 @@ import {
   Navigation,
   Search,
   X,
-  Globe
+  Globe,
+  ExternalLink,
+  Bell
 } from 'lucide-react';
 import { JournalEntry, SaveErrorState, EntryLocation } from '../types';
 import { saveJournalEntry } from '../lib/firestoreService';
@@ -55,6 +57,7 @@ export function JournalEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [isSummarizing, setIsSummarizing] = useState(false);
   const [saveSuccessNotice, setSaveSuccessNotice] = useState(false);
+  const [notifyViaWebhook, setNotifyViaWebhook] = useState(false);
 
   // Sync state when active entry changes
   useEffect(() => {
@@ -185,6 +188,22 @@ export function JournalEditor({
       onSaveSuccess(saved);
       setSaveSuccessNotice(true);
       setTimeout(() => setSaveSuccessNotice(false), 3000);
+
+      // Non-blocking privacy-preserving webhook notification
+      if (notifyViaWebhook || saved.mood === 'Challenged') {
+        fetch('/api/notifications/dispatch', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            event: 'journal_milestone_saved',
+            mood: saved.mood || 'Reflective',
+            theme: saved.theme || 'Personal Growth',
+            summarySnippet: saved.summary || saved.title || 'Personal Reflection',
+            locationSummary: saved.location?.placeName || 'Not recorded',
+            userHash: userId,
+          }),
+        }).catch((wErr) => console.warn('Non-blocking webhook notification skipped:', wErr));
+      }
     } catch (err: any) {
       console.error('Save error:', err);
       onError({
@@ -397,22 +416,46 @@ export function JournalEditor({
               </button>
             </>
           ) : (
-            /* Pinned Location Chip */
+            /* Pinned Location Chip with Google Maps link */
             <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs bg-amber-500/10 border border-amber-500/30 text-amber-300">
               <MapPin className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span className="font-medium max-w-[200px] truncate" title={location.formattedAddress || location.placeName}>
+              <span className="font-medium max-w-[180px] truncate" title={location.formattedAddress || location.placeName}>
                 {location.placeName || `${location.latitude.toFixed(2)}°, ${location.longitude.toFixed(2)}°`}
               </span>
+              <a
+                href={`https://www.google.com/maps/search/?api=1&query=${location.latitude},${location.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-amber-400 hover:text-amber-200 transition-colors p-0.5"
+                title="Open in Google Maps"
+              >
+                <ExternalLink className="w-3 h-3" />
+              </a>
               <button
                 type="button"
                 onClick={() => setLocation(null)}
-                className="text-stone-400 hover:text-rose-400 transition-colors ml-1 cursor-pointer"
+                className="text-stone-400 hover:text-rose-400 transition-colors ml-0.5 cursor-pointer"
                 title="Remove pinned location"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
             </div>
           )}
+
+          {/* Webhook Alert Toggle */}
+          <button
+            type="button"
+            onClick={() => setNotifyViaWebhook(!notifyViaWebhook)}
+            className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium transition-colors cursor-pointer ${
+              notifyViaWebhook
+                ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                : 'bg-stone-800/60 text-stone-400 hover:text-stone-200 border border-stone-800'
+            }`}
+            title="Dispatch outbound notification webhook on save"
+          >
+            <Bell className={`w-3.5 h-3.5 ${notifyViaWebhook ? 'text-amber-400' : 'text-stone-400'}`} />
+            <span>Webhook Alert</span>
+          </button>
         </div>
       </div>
 

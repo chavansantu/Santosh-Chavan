@@ -33,6 +33,8 @@ export interface SystemMetrics {
   moodDistribution: Record<string, number>;
   modelUsageBreakdown: Record<string, number>;
   locationEntriesCount: number;
+  configuredAdminsCount?: number;
+  adminEmails?: string[];
   recentAuditLogs: AdminAuditLog[];
   lastCalculated: string;
 }
@@ -44,6 +46,19 @@ export interface AdminAuditLog {
   action: string;
   status: 'SUCCESS' | 'DENIED' | 'FLAGGED';
   details: string;
+}
+
+export interface AdminConfig {
+  adminEmails: string[];
+  googleMaps: {
+    configured: boolean;
+    provider: string;
+    maskedKey: string | null;
+  };
+  notificationWebhook: {
+    configured: boolean;
+    url: string;
+  };
 }
 
 export interface NotificationPayload {

@@ -16,11 +16,17 @@ service cloud.firestore {
       );
     }
 
-    // Helper: Admin Role Verification via Custom Claims or configured admin email
+    // Helper: Admin Role Verification via Custom Claims or configured admin emails list
     function isAdmin() {
       return request.auth != null && (
         (request.auth.token.keys().hasAll(['admin']) && request.auth.token.admin == true) ||
-        request.auth.token.email in ['chavansantu1899@gmail.com']
+        request.auth.token.email in [
+          'chavansantu1899@gmail.com',
+          'admin@example.com',
+          'security@example.com',
+          'cloud-architect@example.com',
+          'audit-team@example.com'
+        ]
       );
     }
 

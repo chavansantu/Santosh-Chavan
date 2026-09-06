@@ -1,0 +1,98 @@
+{
+  "entities": {
+    "user": {
+      "title": "User",
+      "description": "Authenticated journal account and user profile",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "displayName": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "user"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email"]
+    },
+    "entry": {
+      "title": "JournalEntry",
+      "description": "Private reflection document with optional location metadata",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "title": { "type": "string" },
+        "content": { "type": "string" },
+        "mood": { "type": "string" },
+        "theme": { "type": "string" },
+        "tags": { "type": "array" },
+        "location": { "type": "object" },
+        "createdAt": { "type": "string" },
+        "updatedAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "content", "createdAt"]
+    },
+    "interaction": {
+      "title": "InteractionMessage",
+      "description": "Multi-turn Gemini AI conversation history bound to journal reflections",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "entryId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "model": { "type": "string" }
+      },
+      "required": ["id", "userId", "entryId", "role", "content", "timestamp"]
+    },
+    "system_metric": {
+      "title": "SystemMetric",
+      "description": "Aggregated non-invasive telemetry for administrators",
+      "type": "object",
+      "properties": {
+        "totalEntriesCount": { "type": "number" },
+        "activeUsersCount": { "type": "number" },
+        "locationEntriesCount": { "type": "number" },
+        "lastCalculated": { "type": "string" }
+      },
+      "required": ["totalEntriesCount", "activeUsersCount"]
+    },
+    "admin_audit_log": {
+      "title": "AdminAuditLog",
+      "description": "Security audit record for privileged actions and SSRF blocks",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "adminEmail": { "type": "string" },
+        "action": { "type": "string" },
+        "status": { "type": "string", "enum": ["SUCCESS", "DENIED", "FLAGGED"] },
+        "details": { "type": "string" }
+      },
+      "required": ["id", "timestamp", "adminEmail", "action", "status"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "user",
+      "description": "User profile document isolated to authenticated user"
+    },
+    "/users/{userId}/entries/{entryId}": {
+      "schema": "entry",
+      "description": "Tenant-isolated personal journal reflections"
+    },
+    "/users/{userId}/interactions/{interactionId}": {
+      "schema": "interaction",
+      "description": "Multi-turn dialogue messages with Gemini"
+    },
+    "/system_metrics/{metricDoc}": {
+      "schema": "system_metric",
+      "description": "Privileged aggregated system telemetry accessible only to admins"
+    },
+    "/admin_audit_logs/{logId}": {
+      "schema": "admin_audit_log",
+      "description": "Immutable security logs accessible only to admins"
+    }
+  }
+}

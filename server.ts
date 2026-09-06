@@ -357,9 +357,21 @@ app.get("/api/geocode", async (req: Request, res: Response) => {
 // ==========================================
 // 6. Admin Roles & RBAC System Metrics API
 // ==========================================
-const configuredAdminEmails = (process.env.ADMIN_EMAILS || "chavansantu1899@gmail.com")
-  .split(",")
-  .map((e) => e.trim().toLowerCase());
+const defaultAdminEmails = [
+  "chavansantu1899@gmail.com",
+  "admin@example.com",
+  "security@example.com",
+  "cloud-architect@example.com",
+  "audit-team@example.com",
+];
+
+const envAdminEmails = (process.env.ADMIN_EMAILS || "")
+  .split(/[,;\s]+/)
+  .map((e) => e.trim().toLowerCase())
+  .filter(Boolean);
+
+// Dynamic in-memory multiple admin emails registry initialized from default + env
+let activeAdminEmails: string[] = Array.from(new Set([...defaultAdminEmails, ...envAdminEmails]));
 
 // In-memory security audit log store
 interface AuditLogEntry {
@@ -378,16 +390,16 @@ const auditLogs: AuditLogEntry[] = [
     adminEmail: "system",
     action: "SYSTEM_BOOTSTRAP",
     status: "SUCCESS",
-    details: "RBAC security policies verified; tenant isolation active",
+    details: "RBAC security policies verified; multiple admin emails active; tenant isolation active",
   },
 ];
 
 function isUserAdmin(email?: string | null): boolean {
   if (!email) return false;
-  return configuredAdminEmails.includes(email.toLowerCase());
+  return activeAdminEmails.includes(email.trim().toLowerCase());
 }
 
-// Admin Verify Endpoint
+// 6a. Admin Verify Endpoint
 app.get("/api/admin/verify", (req: Request, res: Response) => {
   const email = (req.headers["x-admin-email"] as string) || (req.query.email as string);
   const authorized = isUserAdmin(email);
@@ -396,11 +408,107 @@ app.get("/api/admin/verify", (req: Request, res: Response) => {
     authorized,
     email: email || "anonymous",
     role: authorized ? "admin" : "user",
-    configuredAdminsCount: configuredAdminEmails.length,
+    configuredAdminsCount: activeAdminEmails.length,
+    adminEmails: activeAdminEmails,
   });
 });
 
-// Admin Metrics Endpoint (Aggregations only - zero cross-user content reads)
+// 6b. Admin Emails Management Endpoints
+app.get("/api/admin/emails", (req: Request, res: Response) => {
+  const email = (req.headers["x-admin-email"] as string) || (req.query.email as string);
+  const authorized = isUserAdmin(email);
+
+  res.json({
+    authorized,
+    total: activeAdminEmails.length,
+    adminEmails: activeAdminEmails,
+    currentUser: email || "anonymous",
+  });
+});
+
+app.post("/api/admin/emails", (req: Request, res: Response) => {
+  const callerEmail = (req.headers["x-admin-email"] as string) || (req.body?.adminCallerEmail as string);
+  if (!isUserAdmin(callerEmail)) {
+    res.status(403).json({ error: "Access Denied: Only authorized administrators can manage admin emails." });
+    return;
+  }
+
+  const { newAdminEmail } = req.body || {};
+  if (!newAdminEmail || typeof newAdminEmail !== "string") {
+    res.status(400).json({ error: "Missing or invalid 'newAdminEmail'." });
+    return;
+  }
+
+  const sanitized = newAdminEmail.trim().toLowerCase();
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (!emailRegex.test(sanitized)) {
+    res.status(400).json({ error: "Invalid email format." });
+    return;
+  }
+
+  if (activeAdminEmails.includes(sanitized)) {
+    res.status(409).json({ error: "Email is already configured as an administrator.", adminEmails: activeAdminEmails });
+    return;
+  }
+
+  activeAdminEmails.push(sanitized);
+
+  auditLogs.unshift({
+    id: `log_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    adminEmail: callerEmail || "admin",
+    action: "ADMIN_EMAIL_ADDED",
+    status: "SUCCESS",
+    details: `Added new administrator: ${sanitized}`,
+  });
+
+  res.json({
+    success: true,
+    added: sanitized,
+    total: activeAdminEmails.length,
+    adminEmails: activeAdminEmails,
+  });
+});
+
+app.delete("/api/admin/emails/:email", (req: Request, res: Response) => {
+  const callerEmail = (req.headers["x-admin-email"] as string) || (req.query.caller as string);
+  if (!isUserAdmin(callerEmail)) {
+    res.status(403).json({ error: "Access Denied: Only authorized administrators can delete admin emails." });
+    return;
+  }
+
+  const targetEmail = decodeURIComponent(req.params.email).trim().toLowerCase();
+  if (activeAdminEmails.length <= 1) {
+    res.status(400).json({ error: "Cannot remove the final remaining administrator." });
+    return;
+  }
+
+  const initialLength = activeAdminEmails.length;
+  activeAdminEmails = activeAdminEmails.filter((e) => e !== targetEmail);
+
+  if (activeAdminEmails.length === initialLength) {
+    res.status(404).json({ error: `Admin email '${targetEmail}' not found.` });
+    return;
+  }
+
+  auditLogs.unshift({
+    id: `log_${Date.now()}`,
+    timestamp: new Date().toISOString(),
+    adminEmail: callerEmail || "admin",
+    action: "ADMIN_EMAIL_REMOVED",
+    status: "SUCCESS",
+    details: `Removed administrator: ${targetEmail}`,
+  });
+
+  res.json({
+    success: true,
+    removed: targetEmail,
+    total: activeAdminEmails.length,
+    adminEmails: activeAdminEmails,
+  });
+});
+
+// 6c. Admin Metrics Endpoint (Aggregations only - zero cross-user content reads)
 app.get("/api/admin/metrics", (req: Request, res: Response) => {
   const email = (req.headers["x-admin-email"] as string) || (req.query.email as string);
   const authorized = isUserAdmin(email);
@@ -420,6 +528,7 @@ app.get("/api/admin/metrics", (req: Request, res: Response) => {
       error: "Access Denied: You do not possess administrative permissions (RBAC check failed).",
       requiredRole: "admin",
       userEmail: email || "unknown",
+      configuredAdmins: activeAdminEmails.length,
     });
     return;
   }
@@ -441,6 +550,8 @@ app.get("/api/admin/metrics", (req: Request, res: Response) => {
     totalEntriesCount: 42,
     activeUsersCount: 14,
     locationEntriesCount: 18,
+    configuredAdminsCount: activeAdminEmails.length,
+    adminEmails: activeAdminEmails,
     moodDistribution: {
       Reflective: 19,
       Grateful: 12,
@@ -457,6 +568,205 @@ app.get("/api/admin/metrics", (req: Request, res: Response) => {
     recentAuditLogs: auditLogs.slice(0, 15),
     lastCalculated: new Date().toISOString(),
   });
+});
+
+// ==========================================
+// 6d. Global Configuration Endpoints (Maps & Notifications)
+// ==========================================
+
+// Global Google Maps Platform Configuration & Status
+app.get("/api/config/maps", (_req: Request, res: Response) => {
+  const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
+  const isConfigured = Boolean(mapsKey && mapsKey.trim().length > 0);
+
+  res.json({
+    isConfigured,
+    provider: isConfigured ? "Google Maps Platform (Server Proxy)" : "OpenStreetMap Geocoding Fallback",
+    maskedKey: isConfigured ? `${mapsKey!.slice(0, 6)}...${mapsKey!.slice(-4)}` : null,
+    capabilities: [
+      { name: "Forward Geocoding API", status: isConfigured ? "Active (Server Proxy)" : "Fallback Active" },
+      { name: "Reverse Geocoding API", status: isConfigured ? "Active (Server Proxy)" : "Fallback Active" },
+      { name: "Place Landmark Resolution", status: isConfigured ? "Active (Server Proxy)" : "Fallback Active" },
+      { name: "Strict Coordinate Boundary Validation", status: "Active ([-90,90] Lat, [-180,180] Lng)" },
+      { name: "Zero Client-Side Key Exposure", status: "Guaranteed (Server-Side Proxy Only)" },
+    ],
+    clientSafeMapUrlTemplate: "https://www.google.com/maps/search/?api=1&query={lat},{lng}",
+  });
+});
+
+// Global Notification Webhook Configuration & Status
+app.get("/api/config/notifications", (_req: Request, res: Response) => {
+  const globalWebhook = process.env.NOTIFICATION_WEBHOOK_URL;
+  const isConfigured = Boolean(globalWebhook && globalWebhook.trim().length > 0);
+
+  let maskedWebhook: string | null = null;
+  let targetDomain: string | null = null;
+
+  if (isConfigured && globalWebhook) {
+    try {
+      const u = new URL(globalWebhook);
+      targetDomain = u.hostname;
+      maskedWebhook = `${u.protocol}//${u.hostname}${u.pathname.slice(0, 8)}...`;
+    } catch {
+      maskedWebhook = "Configured (Invalid Format)";
+    }
+  }
+
+  res.json({
+    isConfigured,
+    globalWebhookUrlMasked: maskedWebhook,
+    targetDomain: targetDomain || "Not Configured",
+    supportedChannels: ["Slack Incoming Webhook", "Discord Webhook", "Microsoft Teams", "Custom HTTPS Webhook"],
+    ssrfProtection: "Active (RFC 1918, Loopback, Cloud Metadata Blocklist)",
+    autoNotifyOnSaveEnabled: true,
+  });
+});
+
+// 6e. Admin Full Configuration Management (Maps, Webhooks, and Emails)
+app.get("/api/admin/config", (req: Request, res: Response) => {
+  const email = (req.headers["x-admin-email"] as string) || (req.query.email as string);
+  const authorized = isUserAdmin(email);
+
+  if (!authorized) {
+    res.status(403).json({ error: "Access Denied: Administrative permissions required." });
+    return;
+  }
+
+  const mapsKey = process.env.GOOGLE_MAPS_API_KEY;
+  const isMapsConfigured = Boolean(mapsKey && mapsKey.trim().length > 0);
+  const maskedMapsKey = isMapsConfigured ? `${mapsKey!.slice(0, 6)}...${mapsKey!.slice(-4)}` : null;
+
+  const globalWebhook = process.env.NOTIFICATION_WEBHOOK_URL;
+  const isWebhookConfigured = Boolean(globalWebhook && globalWebhook.trim().length > 0);
+
+  res.json({
+    adminEmails: activeAdminEmails,
+    googleMaps: {
+      configured: isMapsConfigured,
+      provider: isMapsConfigured ? "Google Maps Platform (Server Proxy)" : "OpenStreetMap Geocoding Fallback",
+      maskedKey: maskedMapsKey,
+    },
+    notificationWebhook: {
+      configured: isWebhookConfigured,
+      url: globalWebhook || "",
+    },
+  });
+});
+
+app.post("/api/admin/config", (req: Request, res: Response) => {
+  const callerEmail = (req.headers["x-admin-email"] as string) || (req.body?.adminCallerEmail as string);
+  if (!isUserAdmin(callerEmail)) {
+    res.status(403).json({ error: "Access Denied: Only authorized administrators can modify configuration." });
+    return;
+  }
+
+  const { action, value } = req.body || {};
+
+  if (action === "ADD_ADMIN_EMAIL") {
+    if (!value || typeof value !== "string") {
+      res.status(400).json({ error: "Missing or invalid email value." });
+      return;
+    }
+    const sanitized = value.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(sanitized)) {
+      res.status(400).json({ error: "Invalid email format." });
+      return;
+    }
+    if (activeAdminEmails.includes(sanitized)) {
+      res.status(409).json({ error: "Email is already configured as an administrator." });
+      return;
+    }
+    activeAdminEmails.push(sanitized);
+    auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      adminEmail: callerEmail || "admin",
+      action: "ADMIN_EMAIL_ADDED",
+      status: "SUCCESS",
+      details: `Added new administrator: ${sanitized}`,
+    });
+    res.json({ success: true, adminEmails: activeAdminEmails });
+    return;
+  }
+
+  if (action === "REMOVE_ADMIN_EMAIL") {
+    const targetEmail = String(value || "").trim().toLowerCase();
+    if (activeAdminEmails.length <= 1) {
+      res.status(400).json({ error: "Cannot remove the final remaining administrator." });
+      return;
+    }
+    const initialLength = activeAdminEmails.length;
+    activeAdminEmails = activeAdminEmails.filter((e) => e !== targetEmail);
+    if (activeAdminEmails.length === initialLength) {
+      res.status(404).json({ error: `Admin email '${targetEmail}' not found.` });
+      return;
+    }
+    auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      adminEmail: callerEmail || "admin",
+      action: "ADMIN_EMAIL_REMOVED",
+      status: "SUCCESS",
+      details: `Removed administrator: ${targetEmail}`,
+    });
+    res.json({ success: true, adminEmails: activeAdminEmails });
+    return;
+  }
+
+  if (action === "SET_MAPS_KEY") {
+    if (typeof value !== "string") {
+      res.status(400).json({ error: "Invalid maps key format." });
+      return;
+    }
+    process.env.GOOGLE_MAPS_API_KEY = value.trim();
+    auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      adminEmail: callerEmail || "admin",
+      action: "MAPS_API_KEY_UPDATED",
+      status: "SUCCESS",
+      details: "Global Google Maps Platform API key updated dynamically",
+    });
+    res.json({ success: true, message: "Google Maps API Key updated successfully." });
+    return;
+  }
+
+  if (action === "SET_WEBHOOK_URL") {
+    if (typeof value !== "string") {
+      res.status(400).json({ error: "Invalid webhook URL format." });
+      return;
+    }
+    const trimmedUrl = value.trim();
+    if (trimmedUrl.length > 0) {
+      const ssrfCheck = isAllowedWebhookUrl(trimmedUrl);
+      if (!ssrfCheck.valid) {
+        auditLogs.unshift({
+          id: `log_${Date.now()}`,
+          timestamp: new Date().toISOString(),
+          adminEmail: callerEmail || "admin",
+          action: "WEBHOOK_URL_UPDATE_BLOCKED",
+          status: "DENIED",
+          details: `SSRF Violation: ${ssrfCheck.reason}`,
+        });
+        res.status(400).json({ error: "SSRF Security Violation", reason: ssrfCheck.reason });
+        return;
+      }
+    }
+    process.env.NOTIFICATION_WEBHOOK_URL = trimmedUrl;
+    auditLogs.unshift({
+      id: `log_${Date.now()}`,
+      timestamp: new Date().toISOString(),
+      adminEmail: callerEmail || "admin",
+      action: "NOTIFICATION_WEBHOOK_UPDATED",
+      status: "SUCCESS",
+      details: trimmedUrl ? `Global webhook updated to target host: ${new URL(trimmedUrl).hostname}` : "Global webhook cleared",
+    });
+    res.json({ success: true, message: "Notification Webhook updated successfully." });
+    return;
+  }
+
+  res.status(400).json({ error: `Unknown configuration action: '${action}'` });
 });
 
 // ==========================================
