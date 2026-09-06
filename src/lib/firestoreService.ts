@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { JournalEntry, InteractionMessage } from '../types';
+import { JournalEntry, InteractionMessage, ChatMessage, GeneratedImageRecord } from '../types';
 import { cleanPayload } from './sanitize';
 
 /**
@@ -164,3 +164,81 @@ export async function fetchInteractionsForEntry(
 
   return list;
 }
+
+export async function saveUserChatMessage(
+  userId: string,
+  message: ChatMessage
+): Promise<void> {
+  if (!userId) return;
+  const chatRef = doc(db, 'users', userId, 'chats', message.id);
+  const payload = cleanPayload({
+    ...message,
+    userId,
+  });
+  await setDoc(chatRef, payload, { merge: true });
+}
+
+export async function fetchUserChatHistory(
+  userId: string
+): Promise<ChatMessage[]> {
+  if (!userId) return [];
+  const chatsRef = collection(db, 'users', userId, 'chats');
+  const q = query(chatsRef, orderBy('timestamp', 'asc'), limit(100));
+
+  const snapshot = await getDocs(q);
+  const list: ChatMessage[] = [];
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    list.push({
+      id: docSnap.id,
+      role: data.role || 'user',
+      content: data.content || '',
+      modelUsed: data.modelUsed,
+      groundingSources: data.groundingSources || [],
+      timestamp: data.timestamp || Date.now(),
+    });
+  });
+  return list;
+}
+
+export async function saveGeneratedImageRecord(
+  userId: string,
+  imageRecord: Omit<GeneratedImageRecord, 'userId'>
+): Promise<GeneratedImageRecord> {
+  if (!userId) throw new Error('User required to save image record.');
+  const imageRef = doc(db, 'users', userId, 'images', imageRecord.id);
+  const payload: GeneratedImageRecord = {
+    ...imageRecord,
+    userId,
+  };
+  const sanitized = cleanPayload(payload);
+  await setDoc(imageRef, sanitized);
+  return payload;
+}
+
+export async function fetchUserGeneratedImages(
+  userId: string
+): Promise<GeneratedImageRecord[]> {
+  if (!userId) return [];
+  const imagesRef = collection(db, 'users', userId, 'images');
+  const q = query(imagesRef, orderBy('createdAt', 'desc'), limit(50));
+
+  const snapshot = await getDocs(q);
+  const list: GeneratedImageRecord[] = [];
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    list.push({
+      id: docSnap.id,
+      userId,
+      prompt: data.prompt || '',
+      imageUrl: data.imageUrl || '',
+      aspectRatio: data.aspectRatio || '1:1',
+      modelUsed: data.modelUsed || 'gemini-3.1-flash-image-preview',
+      isEdit: data.isEdit || false,
+      parentImageId: data.parentImageId,
+      createdAt: data.createdAt || Date.now(),
+    });
+  });
+  return list;
+}
+

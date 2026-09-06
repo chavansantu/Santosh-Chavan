@@ -9,16 +9,19 @@ import { auth, signInWithGoogle, logOut, subscribeToAuth } from './lib/firebase'
 import { 
   fetchUserEntries, 
   deleteJournalEntry, 
-  fetchInteractionsForEntry 
+  fetchInteractionsForEntry,
+  saveJournalEntry
 } from './lib/firestoreService';
-import { Header } from './components/Header';
+import { Header, ActiveAppView } from './components/Header';
 import { LandingPage } from './components/LandingPage';
 import { JournalEditor } from './components/JournalEditor';
 import { GeminiReflectionPanel } from './components/GeminiReflectionPanel';
+import { GeminiChatbot } from './components/GeminiChatbot';
+import { ImageStudio } from './components/ImageStudio';
 import { HistorySidebar } from './components/HistorySidebar';
 import { ErrorBanner } from './components/ErrorBanner';
 import { AdminDashboard } from './components/AdminDashboard';
-import { Loader2, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Loader2, ShieldCheck, HelpCircle, MessageSquareText, Image as ImageIcon, BookOpen } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -31,6 +34,7 @@ export default function App() {
     message: '',
   });
   const [loadingEntries, setLoadingEntries] = useState(false);
+  const [currentView, setCurrentView] = useState<ActiveAppView>('journal');
   const [mobileTab, setMobileTab] = useState<'editor' | 'gemini' | 'history'>('editor');
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [showAdmin, setShowAdmin] = useState(false);
@@ -171,6 +175,36 @@ export default function App() {
     setInteractions((prev) => [...prev, msg]);
   };
 
+  // Attach generated or edited image to the active journal entry
+  const handleAttachImageToEntry = async (imageUrl: string) => {
+    if (!user) return;
+    if (activeEntry) {
+      const updatedContent = activeEntry.content
+        ? `${activeEntry.content}\n\n![Visual Reflection](${imageUrl})`
+        : `![Visual Reflection](${imageUrl})`;
+      try {
+        const saved = await saveJournalEntry(user.uid, {
+          id: activeEntry.id,
+          title: activeEntry.title,
+          content: updatedContent,
+          mood: activeEntry.mood,
+          location: activeEntry.location,
+          summary: activeEntry.summary,
+          theme: activeEntry.theme,
+          keyTakeaways: activeEntry.keyTakeaways,
+        });
+        setActiveEntry(saved);
+        setEntries((prev) => prev.map((e) => (e.id === saved.id ? saved : e)));
+      } catch (err: any) {
+        console.error('Failed to attach image to entry:', err);
+        setErrorState({
+          hasError: true,
+          message: `Failed to attach image: ${err.message}`,
+        });
+      }
+    }
+  };
+
   if (authLoading) {
     return (
       <div className="min-h-screen bg-stone-950 flex flex-col items-center justify-center text-stone-300">
@@ -188,7 +222,8 @@ export default function App() {
         onSignOut={handleSignOut}
         onNewEntry={handleNewEntry}
         entriesCount={entries.length}
-        onOpenAdmin={() => setShowAdmin(true)}
+        currentView={currentView}
+        onChangeView={setCurrentView}
       />
 
       {/* Main Content Area */}
@@ -202,104 +237,128 @@ export default function App() {
             onDismiss={() => setErrorState({ hasError: false, message: '' })}
           />
 
-          {/* Quick bar with Vault Status, Admin Console & Walkthrough Guide Modal toggle */}
+          {/* Quick bar with Vault Status, Grounding badges, & Walkthrough Guide Modal toggle */}
           <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
             <div className="flex items-center gap-2 text-xs text-stone-400">
               <ShieldCheck className="w-4 h-4 text-emerald-400 shrink-0" />
               <span>
-                Connected to isolated Firestore collection: <code className="text-amber-400/90 font-mono text-[11px]">/users/{user.uid.slice(0, 8)}...</code>
+                Connected to Firestore Vault: <code className="text-amber-400/90 font-mono text-[11px]">/users/{user.uid.slice(0, 8)}...</code>
               </span>
             </div>
 
             <div className="flex items-center gap-2">
-              <button
-                id="quickbar-admin-console-btn"
-                onClick={() => setShowAdmin(true)}
-                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-amber-300 hover:text-amber-200 bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 transition-colors cursor-pointer"
-              >
-                <ShieldCheck className="w-3.5 h-3.5 text-amber-400" />
-                <span>Admin Console (RBAC)</span>
-              </button>
-
               <button
                 id="view-walkthrough-guide-btn"
                 onClick={() => setShowWalkthrough(true)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-200 hover:bg-stone-900 border border-stone-800 transition-colors cursor-pointer"
               >
                 <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
-                <span>Test Walkthrough</span>
+                <span>Feature Test Walkthrough</span>
               </button>
             </div>
           </div>
 
-          {/* Mobile Tab Switcher */}
-          <div className="lg:hidden flex items-center p-1 mb-4 rounded-xl bg-stone-900 border border-stone-800 text-xs font-medium">
-            <button
-              onClick={() => setMobileTab('editor')}
-              className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
-                mobileTab === 'editor'
-                  ? 'bg-amber-500 text-stone-950 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Journal
-            </button>
-            <button
-              onClick={() => setMobileTab('gemini')}
-              className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
-                mobileTab === 'gemini'
-                  ? 'bg-amber-500 text-stone-950 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              Gemini AI
-            </button>
-            <button
-              onClick={() => setMobileTab('history')}
-              className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
-                mobileTab === 'history'
-                  ? 'bg-amber-500 text-stone-950 font-semibold'
-                  : 'text-stone-400 hover:text-stone-200'
-              }`}
-            >
-              History ({entries.length})
-            </button>
-          </div>
-
-          {/* Desktop 3-Column Bento Grid Layout */}
-          <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[620px]">
-            {/* Column 1: History (Desktop: 3 cols) */}
-            <div className={`lg:col-span-3 h-full ${mobileTab === 'history' ? 'block' : 'hidden lg:block'}`}>
-              <HistorySidebar
-                entries={entries}
-                activeEntryId={activeEntry?.id || null}
-                onSelectEntry={handleSelectEntry}
-                onNewEntry={handleNewEntry}
-              />
-            </div>
-
-            {/* Column 2: Journal Editor (Desktop: 5 cols) */}
-            <div className={`lg:col-span-5 h-full ${mobileTab === 'editor' ? 'block' : 'hidden lg:block'}`}>
-              <JournalEditor
-                userId={user.uid}
-                entry={activeEntry}
-                onSaveSuccess={handleSaveSuccess}
-                onDeleteEntry={handleDeleteEntry}
-                onError={(err) => setErrorState(err)}
-              />
-            </div>
-
-            {/* Column 3: Gemini Reflection & Multi-turn Chat (Desktop: 4 cols) */}
-            <div className={`lg:col-span-4 h-full ${mobileTab === 'gemini' ? 'block' : 'hidden lg:block'}`}>
-              <GeminiReflectionPanel
+          {/* Conditional View Rendering */}
+          {currentView === 'chat' ? (
+            /* View 1: Gemini Chatbot View */
+            <div className="flex-1 min-h-[640px]">
+              <GeminiChatbot
                 userId={user.uid}
                 activeEntry={activeEntry}
-                interactions={interactions}
-                onAddInteraction={handleAddInteraction}
                 onError={(err) => setErrorState(err)}
               />
             </div>
-          </div>
+          ) : currentView === 'images' ? (
+            /* View 2: Visual Reflections Studio */
+            <div className="flex-1 min-h-[640px]">
+              <ImageStudio
+                userId={user.uid}
+                activeEntry={activeEntry}
+                onAttachImageToEntry={handleAttachImageToEntry}
+                onError={(err) => setErrorState(err)}
+              />
+            </div>
+          ) : currentView === 'admin' ? (
+            /* View 3: Admin Dashboard */
+            <div className="flex-1 min-h-[640px]">
+              <AdminDashboard
+                user={user}
+                onClose={() => setCurrentView('journal')}
+              />
+            </div>
+          ) : (
+            /* View 4: Journal Editor & Reflection Bento Grid */
+            <>
+              {/* Mobile Tab Switcher */}
+              <div className="lg:hidden flex items-center p-1 mb-4 rounded-xl bg-stone-900 border border-stone-800 text-xs font-medium">
+                <button
+                  onClick={() => setMobileTab('editor')}
+                  className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
+                    mobileTab === 'editor'
+                      ? 'bg-amber-500 text-stone-950 font-semibold'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  Journal
+                </button>
+                <button
+                  onClick={() => setMobileTab('gemini')}
+                  className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
+                    mobileTab === 'gemini'
+                      ? 'bg-amber-500 text-stone-950 font-semibold'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  Gemini AI
+                </button>
+                <button
+                  onClick={() => setMobileTab('history')}
+                  className={`flex-1 py-2 rounded-lg text-center transition-colors cursor-pointer ${
+                    mobileTab === 'history'
+                      ? 'bg-amber-500 text-stone-950 font-semibold'
+                      : 'text-stone-400 hover:text-stone-200'
+                  }`}
+                >
+                  History ({entries.length})
+                </button>
+              </div>
+
+              {/* Desktop 3-Column Bento Grid Layout */}
+              <div className="flex-1 grid grid-cols-1 lg:grid-cols-12 gap-5 min-h-[620px]">
+                {/* Column 1: History (Desktop: 3 cols) */}
+                <div className={`lg:col-span-3 h-full ${mobileTab === 'history' ? 'block' : 'hidden lg:block'}`}>
+                  <HistorySidebar
+                    entries={entries}
+                    activeEntryId={activeEntry?.id || null}
+                    onSelectEntry={handleSelectEntry}
+                    onNewEntry={handleNewEntry}
+                  />
+                </div>
+
+                {/* Column 2: Journal Editor (Desktop: 5 cols) */}
+                <div className={`lg:col-span-5 h-full ${mobileTab === 'editor' ? 'block' : 'hidden lg:block'}`}>
+                  <JournalEditor
+                    userId={user.uid}
+                    entry={activeEntry}
+                    onSaveSuccess={handleSaveSuccess}
+                    onDeleteEntry={handleDeleteEntry}
+                    onError={(err) => setErrorState(err)}
+                  />
+                </div>
+
+                {/* Column 3: Gemini Reflection & Multi-turn Chat (Desktop: 4 cols) */}
+                <div className={`lg:col-span-4 h-full ${mobileTab === 'gemini' ? 'block' : 'hidden lg:block'}`}>
+                  <GeminiReflectionPanel
+                    userId={user.uid}
+                    activeEntry={activeEntry}
+                    interactions={interactions}
+                    onAddInteraction={handleAddInteraction}
+                    onError={(err) => setErrorState(err)}
+                  />
+                </div>
+              </div>
+            </>
+          )}
         </main>
       )}
 
@@ -310,11 +369,11 @@ export default function App() {
             <div className="flex items-center justify-between pb-3 border-b border-stone-800">
               <h3 className="text-base font-semibold text-stone-100 flex items-center gap-2">
                 <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                Functional Verification Walkthrough
+                Comprehensive Features Verification Guide
               </h3>
               <button
                 onClick={() => setShowWalkthrough(false)}
-                className="p-1 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800"
+                className="p-1 rounded-lg text-stone-400 hover:text-stone-200 hover:bg-stone-800 cursor-pointer"
               >
                 ✕
               </button>
@@ -326,69 +385,59 @@ export default function App() {
               </p>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">1. Authentication & Isolation Test</p>
+                <p className="font-semibold text-amber-400">1. Authentication & Tenant Isolation</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> Click "Sign In with Google". After popup sign-in, verify the header displays your name and photo.</li>
-                  <li><strong>Step B:</strong> Note your unique user ID under the header banner. Notice that queries are strictly isolated under <code>/users/{"{userId}"}</code> in Firestore.</li>
-                  <li><strong>Step C:</strong> Click "Sign Out" to return to the landing page and verify private records are purged from memory.</li>
+                  <li><strong>Step A:</strong> Click "Sign In with Google". Verify the header displays your profile picture and name.</li>
+                  <li><strong>Step B:</strong> Verify data is strictly stored under <code>/users/{"{userId}"}</code> with owner-bound rules.</li>
                 </ul>
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">2. Journal Reflection & Firestore Persistence</p>
+                <p className="font-semibold text-amber-400">2. Multi-Turn Gemini Chatbot with Persona Roles</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> Enter a title, select a mood tag, and type your reflection thoughts into the main text area.</li>
-                  <li><strong>Step B:</strong> Click "Save Entry". Confirm the "Saved!" notice appears and the entry appears in the "Journal History" sidebar.</li>
-                  <li><strong>Step C:</strong> Refresh the page. Confirm your entry loads directly from Cloud Firestore.</li>
+                  <li><strong>Step A:</strong> Click the <strong>"Gemini Chatbot"</strong> tab in the header.</li>
+                  <li><strong>Step B:</strong> Switch roles between <em>Mindful Companion</em>, <em>Introspective Analyst</em>, <em>Socratic Mentor</em>, and <em>Creative Muse</em>.</li>
+                  <li><strong>Step C:</strong> Switch models between <code>gemini-3.1-pro-preview</code> (Deep Reasoning), <code>gemini-3.5-flash</code> (Fast & Grounded), and <code>gemini-3.1-flash-lite</code> (Low-latency).</li>
+                  <li><strong>Step D:</strong> Chat multi-turn; verify conversational history is preserved and stored in Firestore.</li>
                 </ul>
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">3. Gemini AI Summaries & Insights</p>
+                <p className="font-semibold text-amber-400">3. Google Maps Grounding with Live Place Citations</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> In the Journal Editor, click the "AI Insights" button.</li>
-                  <li><strong>Step B:</strong> Verify Gemini analyzes the text, generates a theme badge, synthesis summary, and key takeaways checklist.</li>
-                  <li><strong>Step C:</strong> Verify these insights are automatically saved back to Firestore with the entry.</li>
+                  <li><strong>Step A:</strong> In the Gemini Chatbot, toggle the <strong>"Google Maps Grounding"</strong> switch.</li>
+                  <li><strong>Step B:</strong> Click "Share GPS" or let it detect location, or ask: <em>"Find quiet zen gardens, tranquil public parks, or serene tea houses near my location"</em>.</li>
+                  <li><strong>Step C:</strong> The server automatically routes through <code>gemini-3.5-flash</code> with the <code>googleMaps</code> tool.</li>
+                  <li><strong>Step D:</strong> Confirm response displays real-world Google Maps place cards, address citations, and direct links.</li>
                 </ul>
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">4. Multi-Turn Reflective Dialogue</p>
+                <p className="font-semibold text-amber-400">4. Google Search Grounding with Live Web Sources</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> In the right panel, select a mode (Reflect, Summarize, or Brainstorm).</li>
-                  <li><strong>Step B:</strong> Click a suggested prompt chip or type a custom question, then click Send.</li>
-                  <li><strong>Step C:</strong> Watch Gemini reply using <code>gemini-3.6-flash</code> (with fallback ladder active).</li>
-                  <li><strong>Step D:</strong> Send a follow-up message to verify conversational context preservation across turns.</li>
+                  <li><strong>Step A:</strong> In the Gemini Chatbot, toggle the <strong>"Google Search Grounding"</strong> switch.</li>
+                  <li><strong>Step B:</strong> Ask a timely question: <em>"What are the latest cognitive psychology findings on daily expressive writing and stress reduction in 2025/2026?"</em></li>
+                  <li><strong>Step C:</strong> The server executes with <code>gemini-3.5-flash</code> and the <code>googleSearch</code> tool.</li>
+                  <li><strong>Step D:</strong> Notice the verified web citations and direct external reference links at the bottom of the message.</li>
                 </ul>
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">5. Location-Aware Journal Entries</p>
+                <p className="font-semibold text-amber-400">5. AI Image Creation & Editing (gemini-3.1-flash-image-preview)</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> In the Journal Editor, click "Pin GPS" to capture your current browser coordinates, or click "Place Search" and type a city/landmark (e.g., "Kyoto, Japan").</li>
-                  <li><strong>Step B:</strong> Verify the place name resolves securely through the server-side geocoding proxy without exposing API keys.</li>
-                  <li><strong>Step C:</strong> Click "Save Entry". Confirm the location badge appears in the entry and in the Journal History card.</li>
-                  <li><strong>Step D:</strong> Coordinate boundaries (-90 to 90 lat, -180 to 180 lng) are verified in <code>firestore.rules</code>.</li>
+                  <li><strong>Step A:</strong> Click the <strong>"Visual Studio"</strong> tab in the header.</li>
+                  <li><strong>Step B:</strong> Select an aspect ratio (1:1, 16:9, etc.) and enter a prompt: <em>"A serene lakeside mountain cabin during golden hour sunrise"</em>.</li>
+                  <li><strong>Step C:</strong> Click "Generate Visual Reflection". Gemini 3.1 Flash Image Preview synthesizes the image.</li>
+                  <li><strong>Step D:</strong> Switch to the "Edit" tab, describe modifications (e.g. <em>"Add glowing bioluminescent water and starry night sky"</em>), and synthesize.</li>
+                  <li><strong>Step E:</strong> Click "Attach to Entry" to bind the generated artwork directly into your active journal entry, or download the PNG.</li>
                 </ul>
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">6. Admin RBAC & Privacy Telemetry</p>
+                <p className="font-semibold text-amber-400">6. Admin RBAC & SSRF-Protected Webhooks</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> Click "Admin Console (RBAC)" in the header or status bar.</li>
-                  <li><strong>Step B:</strong> The server verifies the caller's email against authorized admin credentials (<code>ADMIN_EMAILS</code>).</li>
-                  <li><strong>Step C:</strong> Confirm system-wide aggregated metrics (total entries, active tenants, location tag count, and Gemini fallback ladder statistics) are visible.</li>
-                  <li><strong>Step D:</strong> Notice the Tenant Isolation guarantee: Admins never receive private entry text across tenant boundaries.</li>
-                </ul>
-              </div>
-
-              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">7. External Notifications with SSRF Security Defense</p>
-                <ul className="list-disc list-inside space-y-1 text-stone-300">
-                  <li><strong>Step A:</strong> In the Admin Console, navigate to the "External Notification Dispatch Hub".</li>
-                  <li><strong>Step B:</strong> Click "Test Cloud Metadata Probe" (<code>http://169.254.169.254/...</code>) and click Dispatch. Verify the server rejects the request with an SSRF blocking error.</li>
-                  <li><strong>Step C:</strong> Click "Test Localhost Probe" (<code>http://localhost:3000/...</code>) and verify loopback traffic is actively blocked.</li>
-                  <li><strong>Step D:</strong> Click "Test Safe Public HTTPS" (<code>https://httpbin.org/post</code>) to verify legitimate outbound notifications pass through safely.</li>
+                  <li><strong>Step A:</strong> Click "Admin RBAC" in the header navigation.</li>
+                  <li><strong>Step B:</strong> Check system telemetry, fallback ladder health, and SSRF firewall testing suite.</li>
                 </ul>
               </div>
             </div>
@@ -398,14 +447,14 @@ export default function App() {
                 onClick={() => setShowWalkthrough(false)}
                 className="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-stone-950 font-semibold text-xs sm:text-sm cursor-pointer"
               >
-                Got It
+                Close Guide
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* Admin RBAC Console Modal */}
+      {/* Admin RBAC Console Modal (if opened directly via fallback button) */}
       {showAdmin && (
         <AdminDashboard
           user={user}

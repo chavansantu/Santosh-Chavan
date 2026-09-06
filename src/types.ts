@@ -92,6 +92,44 @@ export interface EntryAnalysis {
   modelUsed?: string;
 }
 
+export interface GroundingSource {
+  title?: string;
+  uri?: string;
+  snippets?: string[];
+  type: 'search' | 'maps';
+}
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'model';
+  content: string;
+  modelUsed?: string;
+  groundingSources?: GroundingSource[];
+  timestamp: number;
+}
+
+export interface ChatRole {
+  id: string;
+  name: string;
+  description: string;
+  systemInstruction: string;
+  defaultModel: 'gemini-3.1-pro-preview' | 'gemini-3.5-flash' | 'gemini-3.1-flash-lite';
+  suggestedGrounding?: 'none' | 'maps' | 'search';
+  iconName: string;
+}
+
+export interface GeneratedImageRecord {
+  id: string;
+  userId: string;
+  prompt: string;
+  imageUrl: string;
+  aspectRatio: string;
+  modelUsed: string;
+  isEdit?: boolean;
+  parentImageId?: string;
+  createdAt: number;
+}
+
 export interface SaveErrorState {
   hasError: boolean;
   message: string;

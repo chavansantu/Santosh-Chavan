@@ -115,6 +115,14 @@ service cloud.firestore {
       match /entries/{entryId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+
+      match /chats/{chatId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /images/{imageId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }
