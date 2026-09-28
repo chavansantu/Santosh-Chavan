@@ -21,6 +21,7 @@ import { GeminiLiveVoice } from './components/GeminiLiveVoice';
 import { ImageStudio } from './components/ImageStudio';
 import { HistorySidebar } from './components/HistorySidebar';
 import { MonthlyCalendarView } from './components/MonthlyCalendarView';
+import { TrendsView } from './components/TrendsView';
 import { ErrorBanner } from './components/ErrorBanner';
 import { AdminDashboard } from './components/AdminDashboard';
 import { Loader2, ShieldCheck, HelpCircle, MessageSquareText, Image as ImageIcon, BookOpen, Radio } from 'lucide-react';
@@ -287,6 +288,18 @@ export default function App() {
                 onBackToJournal={() => setCurrentView('journal')}
               />
             </div>
+          ) : currentView === 'trends' ? (
+            /* View: Trends Analytics View */
+            <div className="flex-1 min-h-[640px]">
+              <TrendsView
+                entries={entries}
+                onSelectEntry={(entry) => {
+                  handleSelectEntry(entry);
+                  setCurrentView('journal');
+                }}
+                onBackToJournal={() => setCurrentView('journal')}
+              />
+            </div>
           ) : currentView === 'chat' ? (
             /* View 1: Gemini Chatbot View */
             <div className="flex-1 min-h-[640px]">
@@ -371,6 +384,7 @@ export default function App() {
                     onSelectEntry={handleSelectEntry}
                     onNewEntry={handleNewEntry}
                     onOpenCalendar={() => setCurrentView('calendar')}
+                    onOpenTrends={() => setCurrentView('trends')}
                   />
                 </div>
 
@@ -516,6 +530,21 @@ export default function App() {
                   <li><strong>Step E:</strong> Click any day cell in the calendar grid. The <strong>Selected Date</strong> panel on the right updates to display all reflections recorded on that day.</li>
                   <li><strong>Step F:</strong> In the day inspector, click <strong>"Open in Journal Editor"</strong> on any entry card. Verify the app navigates directly into the editor with that reflection loaded for reading, editing, or Gemini AI reflection.</li>
                   <li><strong>Step G:</strong> Test the <strong>"Highlight Mood"</strong> filter chips in the calendar header to isolate days with specific moods (e.g. <em>Happy</em> or <em>Stressed</em>).</li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
+                <p className="font-semibold text-amber-400">10. Reflection Trends & Mood Analytics (D3 Engine)</p>
+                <ul className="list-disc list-inside space-y-1 text-stone-300">
+                  <li><strong>Step A:</strong> Click <strong>"Trends"</strong> in the top navigation bar or the trending icon in the Journal History sidebar.</li>
+                  <li><strong>Step B:</strong> Review the top KPI cards: Reflections In Scope, Avg Reflection Depth, Dominant Mood, and Weekly Writing Cadence.</li>
+                  <li><strong>Step C:</strong> Toggle time horizons (<em>7d</em>, <em>30d</em>, <em>90d</em>, <em>All Time</em>) to observe live timeline re-scaling.</li>
+                  <li><strong>Step D:</strong> Toggle between <strong>Words</strong> and <strong>Characters</strong> metric units; verify the charts re-render instantly.</li>
+                  <li><strong>Step E:</strong> Hover over the D3 Time-Series scatter points. Confirm interactive tooltips show entry title, exact timestamp, mood emoji badge, and reflection length.</li>
+                  <li><strong>Step F:</strong> Hover over arcs in the <strong>Mood Frequency Donut Chart</strong> to see percentage breakdown and entry share.</li>
+                  <li><strong>Step G:</strong> Inspect the <strong>Depth by Mood</strong> bar chart to understand emotional correlation with reflection length.</li>
+                  <li><strong>Step H:</strong> Examine the <strong>Day-of-Week Rhythm</strong> chart to spot peak journaling days.</li>
+                  <li><strong>Step I:</strong> Click any dot in the timeline scatter chart to jump straight to that entry in the Journal Editor.</li>
                 </ul>
               </div>
             </div>

@@ -9,10 +9,11 @@ import {
   MessageSquareText, 
   Image as ImageIcon,
   Radio,
-  CalendarDays
+  CalendarDays,
+  TrendingUp
 } from 'lucide-react';
 
-export type ActiveAppView = 'journal' | 'calendar' | 'chat' | 'voice' | 'images' | 'admin';
+export type ActiveAppView = 'journal' | 'calendar' | 'trends' | 'chat' | 'voice' | 'images' | 'admin';
 
 interface HeaderProps {
   user: AuthUser | null;
@@ -88,6 +89,19 @@ export function Header({
             >
               <CalendarDays className="w-3.5 h-3.5" />
               <span>Monthly Calendar</span>
+            </button>
+
+            <button
+              id="nav-tab-trends"
+              onClick={() => onChangeView('trends')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                currentView === 'trends'
+                  ? 'bg-amber-500 text-stone-950 font-semibold shadow-xs'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              <TrendingUp className="w-3.5 h-3.5" />
+              <span>Trends</span>
             </button>
 
             <button
@@ -212,6 +226,14 @@ export function Header({
             }`}
           >
             Calendar
+          </button>
+          <button
+            onClick={() => onChangeView('trends')}
+            className={`px-2.5 py-1 rounded-md shrink-0 ${
+              currentView === 'trends' ? 'bg-amber-500 text-stone-950 font-bold' : 'text-stone-400'
+            }`}
+          >
+            Trends
           </button>
           <button
             onClick={() => onChangeView('chat')}

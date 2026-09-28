@@ -3,6 +3,7 @@ import {
   Search, 
   Calendar, 
   CalendarDays,
+  TrendingUp,
   Plus, 
   BookText, 
   Sparkles, 
@@ -22,6 +23,7 @@ interface HistorySidebarProps {
   onSelectEntry: (entry: JournalEntry) => void;
   onNewEntry: () => void;
   onOpenCalendar?: () => void;
+  onOpenTrends?: () => void;
 }
 
 // Canonical mood definitions with representative emojis
@@ -73,6 +75,7 @@ export function HistorySidebar({
   onSelectEntry,
   onNewEntry,
   onOpenCalendar,
+  onOpenTrends,
 }: HistorySidebarProps) {
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedMoods, setSelectedMoods] = useState<string[]>([]);
@@ -180,6 +183,17 @@ export function HistorySidebar({
               title="Open Monthly Calendar View"
             >
               <CalendarDays className="w-4 h-4" />
+            </button>
+          )}
+
+          {onOpenTrends && (
+            <button
+              id="sidebar-trends-view-btn"
+              onClick={onOpenTrends}
+              className="p-1.5 rounded-lg bg-stone-800 hover:bg-stone-700 text-stone-300 hover:text-amber-400 transition-colors cursor-pointer"
+              title="Open Reflection Trends & Analytics"
+            >
+              <TrendingUp className="w-4 h-4" />
             </button>
           )}
 
