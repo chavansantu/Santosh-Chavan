@@ -9,6 +9,60 @@
     <meta property="og:description" content="A secure, user-authenticated reflection and journaling web app powered by Gemini and Cloud Firestore with location-aware entries, admin RBAC, and external alerts." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <script>
+      // AI Studio preview environment: HMR is disabled. Ignore and suppress WebSocket connection errors.
+      (function() {
+        function isWsError(err) {
+          if (!err) return false;
+          var msg = (typeof err === 'string' ? err : (err.message || err.reason || '')) + '';
+          return (
+            msg.indexOf('WebSocket') !== -1 ||
+            msg.indexOf('websocket') !== -1 ||
+            msg.indexOf('vite-hmr') !== -1
+          );
+        }
+
+        window.addEventListener('error', function(event) {
+          if (
+            isWsError(event.error) ||
+            isWsError(event.message) ||
+            (event.filename && event.filename.indexOf('@vite/client') !== -1)
+          ) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isWsError(event.reason)) {
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            return true;
+          }
+        }, true);
+
+        // Remove any Vite error overlay created for WebSocket or HMR connection failures
+        if (typeof MutationObserver !== 'undefined') {
+          var observer = new MutationObserver(function(mutations) {
+            for (var i = 0; i < mutations.length; i++) {
+              var added = mutations[i].addedNodes;
+              for (var j = 0; j < added.length; j++) {
+                var node = added[j];
+                if (node && node.nodeName === 'VITE-ERROR-OVERLAY') {
+                  var shadow = node.shadowRoot;
+                  var text = (shadow ? shadow.textContent : node.textContent) || '';
+                  if (text.indexOf('WebSocket') !== -1 || text.indexOf('failed to connect to websocket') !== -1) {
+                    node.remove();
+                  }
+                }
+              }
+            }
+          });
+          observer.observe(document.documentElement, { childList: true, subtree: true });
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -1,11 +1,18 @@
 import express, { Request, Response } from "express";
+import http from "http";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, Modality, LiveServerMessage } from "@google/genai";
+import { WebSocketServer, WebSocket } from "ws";
 import dotenv from "dotenv";
 
 dotenv.config();
+
+// Ensure HMR is disabled in AI Studio container preview to prevent unhandled WebSocket closure errors
+if (process.env.DISABLE_HMR === undefined) {
+  process.env.DISABLE_HMR = "true";
+}
 
 const app = express();
 const PORT = 3000;
@@ -1214,12 +1221,74 @@ app.post("/api/notifications/dispatch", async (req: Request, res: Response) => {
   }
 });
 
+// Voice Session Synthesis Endpoint: Summarizes spoken reflection session into a journal entry
+app.post("/api/voice/summarize", async (req: Request, res: Response) => {
+  try {
+    const transcript = req.body && Array.isArray(req.body.transcript) ? req.body.transcript : [];
+    if (transcript.length === 0) {
+      return res.status(400).json({ error: "Transcript items required" });
+    }
 
-// Unified Full-Stack Dev Server & Static Asset Serving Setup
+    const conversationText = transcript
+      .map((t: any) => `${t.speaker === 'user' ? 'Me' : 'Gemini Companion'}: ${t.text}`)
+      .join('\n');
+
+    const prompt = `Review this real-time spoken voice reflection between a journaler and Gemini Live companion:
+
+${conversationText}
+
+Synthesize this session into a meaningful, first-person journal entry and psychological reflection.
+Return a valid JSON object matching this schema:
+{
+  "title": "A concise, evocative title (under 8 words)",
+  "mood": "Detected emotional state (e.g. Grateful, Relieved, Contemplative, Inspired, Centered, Anxious, Energized)",
+  "summary": "A 2-3 paragraph first-person reflective entry capturing the essence of the dialogue, emotional shifts, and realizations.",
+  "theme": "The overarching personal growth theme (e.g. Mindfulness & Boundaries, Finding Clarity in Chaos)",
+  "tags": ["Voice Reflection", "Gemini Live", "Self-Care"],
+  "keyTakeaways": [
+    "Key realization 1",
+    "Key realization 2",
+    "Key realization 3"
+  ]
+}
+
+Only return valid JSON. Do not include markdown code fences.`;
+
+    const { text, modelUsed } = await generateContentWithFallback({
+      contents: prompt,
+      systemInstruction: "You are an empathetic, insightful psychologist and reflective writing guide. Output valid JSON only.",
+    });
+
+    let clean = text.trim();
+    if (clean.startsWith("```json")) {
+      clean = clean.replace(/^```json/, "").replace(/```$/, "").trim();
+    } else if (clean.startsWith("```")) {
+      clean = clean.replace(/^```/, "").replace(/```$/, "").trim();
+    }
+
+    const parsed = JSON.parse(clean);
+    res.json({
+      ...parsed,
+      modelUsed,
+    });
+  } catch (err: any) {
+    console.error("Voice summarize error:", err);
+    res.status(500).json({
+      error: "Failed to summarize voice reflection",
+      details: err.message,
+    });
+  }
+});
+
+
+// Unified Full-Stack Dev Server & WebSocket Live API Streaming Setup
 async function startServer() {
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        hmr: false,
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
@@ -1231,8 +1300,208 @@ async function startServer() {
     });
   }
 
-  app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server listening on http://0.0.0.0:${PORT}`);
+  const server = http.createServer(app);
+
+  // WebSocket Server for Gemini 3.8 Live API real-time voice streaming
+  const wss = new WebSocketServer({ noServer: true });
+
+  server.on("upgrade", (request, socket, head) => {
+    try {
+      const url = new URL(request.url || "", `http://${request.headers.host || "localhost:3000"}`);
+      if (url.pathname === "/live") {
+        wss.handleUpgrade(request, socket, head, (ws) => {
+          wss.emit("connection", ws, request);
+        });
+      } else {
+        // Cleanly terminate unhandled upgrade requests to prevent dangling sockets
+        socket.destroy();
+      }
+    } catch (err) {
+      console.error("[WS Upgrade Error]:", err);
+      socket.destroy();
+    }
+  });
+
+  wss.on("connection", async (clientWs: WebSocket, request: http.IncomingMessage) => {
+    let liveSession: any = null;
+    let isSessionActive = true;
+
+    try {
+      const url = new URL(request.url || "", `http://${request.headers.host || "localhost:3000"}`);
+      const voiceParam = url.searchParams.get("voice") || "Zephyr";
+      const allowedVoices = ["Zephyr", "Kore", "Puck", "Charon", "Fenrir"];
+      const voiceName = allowedVoices.includes(voiceParam) ? voiceParam : "Zephyr";
+
+      if (!process.env.GEMINI_API_KEY) {
+        clientWs.send(JSON.stringify({
+          type: "error",
+          error: "GEMINI_API_KEY is not configured on the server. Please check your environment variables.",
+        }));
+        clientWs.close(1008, "Missing API Key");
+        return;
+      }
+
+      const ai = getGeminiClient();
+
+      liveSession = await ai.live.connect({
+        model: "gemini-3.8-live",
+        config: {
+          responseModalities: [Modality.AUDIO],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName },
+            },
+          },
+          systemInstruction: "You are an empathetic, insightful, and warm voice journaling companion for the application 'AI Journal & Reflections'. You engage in a natural spoken conversation with the user to help them reflect on their day, emotions, personal growth, achievements, and worries. Keep verbal turns natural, encouraging, and concise (1-3 sentences per turn) so the user has plenty of space to speak and reflect. Ask gentle guiding questions.",
+          outputAudioTranscription: {},
+          inputAudioTranscription: {},
+        },
+        callbacks: {
+          onopen: () => {
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify({
+                type: "ready",
+                model: "gemini-3.8-live",
+                voice: voiceName,
+              }));
+            }
+          },
+          onmessage: (msg: LiveServerMessage) => {
+            if (!isSessionActive || clientWs.readyState !== WebSocket.OPEN) return;
+
+            // 1. Model Audio & Text Parts
+            const parts = msg.serverContent?.modelTurn?.parts;
+            if (parts) {
+              for (const p of parts) {
+                if (p.inlineData?.data) {
+                  clientWs.send(JSON.stringify({
+                    type: "audio",
+                    audio: p.inlineData.data,
+                  }));
+                }
+                if (p.text) {
+                  clientWs.send(JSON.stringify({
+                    type: "model_text",
+                    text: p.text,
+                  }));
+                }
+              }
+            }
+
+            // 2. Interruption Signal
+            if (msg.serverContent?.interrupted) {
+              clientWs.send(JSON.stringify({
+                type: "interrupted",
+                interrupted: true,
+              }));
+            }
+
+            // 3. User Input Realtime Transcription
+            if (msg.serverContent?.inputTranscription?.text) {
+              clientWs.send(JSON.stringify({
+                type: "input_transcription",
+                text: msg.serverContent.inputTranscription.text,
+                finished: !!msg.serverContent.inputTranscription.finished,
+              }));
+            }
+
+            // 4. Model Output Realtime Transcription
+            if (msg.serverContent?.outputTranscription?.text) {
+              clientWs.send(JSON.stringify({
+                type: "output_transcription",
+                text: msg.serverContent.outputTranscription.text,
+                finished: !!msg.serverContent.outputTranscription.finished,
+              }));
+            }
+
+            // 5. Turn Complete
+            if (msg.serverContent?.turnComplete) {
+              clientWs.send(JSON.stringify({
+                type: "turn_complete",
+              }));
+            }
+          },
+          onerror: (err: any) => {
+            console.error("[Gemini Live Callback Error]:", err);
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify({
+                type: "error",
+                error: err?.message || "Gemini Live session error",
+              }));
+            }
+          },
+          onclose: () => {
+            if (clientWs.readyState === WebSocket.OPEN) {
+              clientWs.send(JSON.stringify({
+                type: "closed",
+              }));
+            }
+          },
+        },
+      });
+
+      // Handle audio stream from client
+      clientWs.on("message", (raw) => {
+        if (!isSessionActive || !liveSession) return;
+        try {
+          const data = JSON.parse(raw.toString());
+          if (data.type === "audio" && data.audio) {
+            // Forward raw 16kHz PCM audio chunk to Gemini Live API
+            liveSession.sendRealtimeInput({
+              audio: {
+                data: data.audio,
+                mimeType: "audio/pcm;rate=16000",
+              },
+            });
+          } else if (data.type === "text" && data.text) {
+            // Send text prompt into the live conversation
+            liveSession.sendRealtimeInput({
+              text: data.text,
+            });
+          } else if (data.type === "close") {
+            isSessionActive = false;
+            try {
+              liveSession.close();
+            } catch {}
+          }
+        } catch (e) {
+          console.warn("[WS Message Parsing Error]:", e);
+        }
+      });
+
+      clientWs.on("close", () => {
+        isSessionActive = false;
+        if (liveSession) {
+          try {
+            liveSession.close();
+          } catch {}
+        }
+      });
+
+      clientWs.on("error", (err) => {
+        console.warn("[Client WS Error]:", err);
+        isSessionActive = false;
+        if (liveSession) {
+          try {
+            liveSession.close();
+          } catch {}
+        }
+      });
+
+    } catch (err: any) {
+      console.error("[Gemini Live Connection Failed]:", err);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(JSON.stringify({
+          type: "error",
+          error: `Failed to initiate Gemini Live session: ${err.message || err}`,
+        }));
+        clientWs.close(1011, "Initialization error");
+      }
+    }
+  });
+
+  server.listen(PORT, "0.0.0.0", () => {
+    console.log(`Server listening on http://0.0.0.0:${PORT} (HTTP & WebSockets)`);
   });
 }
 

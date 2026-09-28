@@ -7,10 +7,12 @@ import {
   ShieldCheck, 
   Shield, 
   MessageSquareText, 
-  Image as ImageIcon 
+  Image as ImageIcon,
+  Radio,
+  CalendarDays
 } from 'lucide-react';
 
-export type ActiveAppView = 'journal' | 'chat' | 'images' | 'admin';
+export type ActiveAppView = 'journal' | 'calendar' | 'chat' | 'voice' | 'images' | 'admin';
 
 interface HeaderProps {
   user: AuthUser | null;
@@ -76,6 +78,19 @@ export function Header({
             </button>
 
             <button
+              id="nav-tab-calendar"
+              onClick={() => onChangeView('calendar')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                currentView === 'calendar'
+                  ? 'bg-amber-500 text-stone-950 font-semibold shadow-xs'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              <CalendarDays className="w-3.5 h-3.5" />
+              <span>Monthly Calendar</span>
+            </button>
+
+            <button
               id="nav-tab-chat"
               onClick={() => onChangeView('chat')}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
@@ -86,6 +101,19 @@ export function Header({
             >
               <MessageSquareText className="w-3.5 h-3.5" />
               <span>Gemini Chatbot</span>
+            </button>
+
+            <button
+              id="nav-tab-voice"
+              onClick={() => onChangeView('voice')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all cursor-pointer ${
+                currentView === 'voice'
+                  ? 'bg-amber-500 text-stone-950 font-semibold shadow-xs'
+                  : 'text-stone-400 hover:text-stone-200 hover:bg-stone-900'
+              }`}
+            >
+              <Radio className="w-3.5 h-3.5" />
+              <span>Live Voice</span>
             </button>
 
             <button
@@ -168,22 +196,38 @@ export function Header({
 
       {/* Mobile view sub-navigation */}
       {user && (
-        <div className="md:hidden flex items-center justify-around px-2 py-1.5 bg-stone-950 border-t border-stone-800 text-xs">
+        <div className="md:hidden flex items-center justify-around px-2 py-1.5 bg-stone-950 border-t border-stone-800 text-xs overflow-x-auto">
           <button
             onClick={() => onChangeView('journal')}
-            className={`px-3 py-1 rounded-md ${
+            className={`px-2.5 py-1 rounded-md shrink-0 ${
               currentView === 'journal' ? 'bg-amber-500 text-stone-950 font-bold' : 'text-stone-400'
             }`}
           >
             Journal
           </button>
           <button
+            onClick={() => onChangeView('calendar')}
+            className={`px-2.5 py-1 rounded-md shrink-0 ${
+              currentView === 'calendar' ? 'bg-amber-500 text-stone-950 font-bold' : 'text-stone-400'
+            }`}
+          >
+            Calendar
+          </button>
+          <button
             onClick={() => onChangeView('chat')}
-            className={`px-3 py-1 rounded-md ${
+            className={`px-2.5 py-1 rounded-md shrink-0 ${
               currentView === 'chat' ? 'bg-amber-500 text-stone-950 font-bold' : 'text-stone-400'
             }`}
           >
             Chatbot
+          </button>
+          <button
+            onClick={() => onChangeView('voice')}
+            className={`px-3 py-1 rounded-md ${
+              currentView === 'voice' ? 'bg-amber-500 text-stone-950 font-bold' : 'text-stone-400'
+            }`}
+          >
+            Live Voice
           </button>
           <button
             onClick={() => onChangeView('images')}

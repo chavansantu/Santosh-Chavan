@@ -8,7 +8,9 @@ A secure, user-authenticated reflection and mindful journaling application power
 
 - **User Identity**: Firebase Authentication via Federated Google Sign-In.
 - **Data Isolation & Storage**: Cloud Firestore where all user documents are strictly confined to `/users/{userId}/...` paths.
-- **AI Processing Engine**: Gemini 3.6 Flash API with an automated 4-tier model fallback ladder (`gemini-3.6-flash` &rarr; `gemini-3.1-flash-lite` &rarr; `gemini-flash-latest` &rarr; `gemini-3.7-flash`).
+- **AI Processing Engine**: Gemini Flash API with an automated fallback ladder (`gemini-3.6-flash`, `gemini-3.1-flash-lite`, `gemini-flash-latest`, `gemini-3.7-flash`).
+- **Mood-Based Reflection Filtering**: Multi-select toggle system in `HistorySidebar` enabling instant filtering of user entries by emotional state (e.g., *Happy*, *Reflective*, *Stressed*, *Grateful*, *Energized*, *Calm*, *Challenged*) with dynamic real-time count badges and unified search integration.
+- **Live Bidirectional Voice (Live API)**: Real-time spoken conversations powered by **`gemini-3.8-live`** streamed over WebSockets (`/live`) with 16kHz PCM microphone input, 24kHz gapless audio playback, real-time speech transcription, companion voice personas (`Zephyr`, `Kore`, `Puck`, `Charon`, `Fenrir`), and one-click synthesis into personal journal reflections.
 - **Location-Aware Entries**: Google Maps integration with server-side Geocoding proxy, GPS pinning, and coordinate validation (-90 to 90 lat, -180 to 180 lng).
 - **Admin Dashboard & RBAC**: Role-based access control (`ADMIN_EMAILS`) for system-wide aggregated telemetry with strict tenant privacy guarantees.
 - **External Notifications Hub**: Outbound webhooks (Slack, Discord) with server-side SSRF mitigation (RFC 1918, loopback, and Cloud Metadata blocklist).
@@ -121,6 +123,10 @@ service cloud.firestore {
       }
 
       match /images/{imageId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+
+      match /voice_sessions/{sessionId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }

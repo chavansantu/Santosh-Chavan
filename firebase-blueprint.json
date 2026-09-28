@@ -71,6 +71,22 @@
         "details": { "type": "string" }
       },
       "required": ["id", "timestamp", "adminEmail", "action", "status"]
+    },
+    "voice_session": {
+      "title": "VoiceSession",
+      "description": "Real-time Gemini Live audio reflection session recording and transcriptions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "voiceName": { "type": "string" },
+        "modelUsed": { "type": "string" },
+        "durationSeconds": { "type": "number" },
+        "transcript": { "type": "array" },
+        "summary": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "userId", "voiceName", "modelUsed", "createdAt"]
     }
   },
   "firestore": {
@@ -85,6 +101,10 @@
     "/users/{userId}/interactions/{interactionId}": {
       "schema": "interaction",
       "description": "Multi-turn dialogue messages with Gemini"
+    },
+    "/users/{userId}/voice_sessions/{sessionId}": {
+      "schema": "voice_session",
+      "description": "Tenant-isolated real-time voice conversation transcripts and reflections"
     },
     "/system_metrics/{metricDoc}": {
       "schema": "system_metric",

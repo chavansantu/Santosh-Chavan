@@ -17,11 +17,13 @@ import { LandingPage } from './components/LandingPage';
 import { JournalEditor } from './components/JournalEditor';
 import { GeminiReflectionPanel } from './components/GeminiReflectionPanel';
 import { GeminiChatbot } from './components/GeminiChatbot';
+import { GeminiLiveVoice } from './components/GeminiLiveVoice';
 import { ImageStudio } from './components/ImageStudio';
 import { HistorySidebar } from './components/HistorySidebar';
+import { MonthlyCalendarView } from './components/MonthlyCalendarView';
 import { ErrorBanner } from './components/ErrorBanner';
 import { AdminDashboard } from './components/AdminDashboard';
-import { Loader2, ShieldCheck, HelpCircle, MessageSquareText, Image as ImageIcon, BookOpen } from 'lucide-react';
+import { Loader2, ShieldCheck, HelpCircle, MessageSquareText, Image as ImageIcon, BookOpen, Radio } from 'lucide-react';
 
 export default function App() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -248,6 +250,15 @@ export default function App() {
 
             <div className="flex items-center gap-2">
               <button
+                id="quick-start-voice-btn"
+                onClick={() => setCurrentView('voice')}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-semibold text-stone-950 bg-amber-400 hover:bg-amber-300 transition-all cursor-pointer shadow-xs active:scale-[0.98]"
+              >
+                <Radio className="w-3.5 h-3.5" />
+                <span>Live Voice Session</span>
+              </button>
+
+              <button
                 id="view-walkthrough-guide-btn"
                 onClick={() => setShowWalkthrough(true)}
                 className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium text-stone-400 hover:text-stone-200 hover:bg-stone-900 border border-stone-800 transition-colors cursor-pointer"
@@ -259,7 +270,24 @@ export default function App() {
           </div>
 
           {/* Conditional View Rendering */}
-          {currentView === 'chat' ? (
+          {currentView === 'calendar' ? (
+            /* View: Monthly Calendar View */
+            <div className="flex-1 min-h-[640px]">
+              <MonthlyCalendarView
+                entries={entries}
+                activeEntryId={activeEntry?.id || null}
+                onSelectEntry={(entry) => {
+                  handleSelectEntry(entry);
+                  setCurrentView('journal');
+                }}
+                onNewEntry={(targetDate) => {
+                  handleNewEntry();
+                  setCurrentView('journal');
+                }}
+                onBackToJournal={() => setCurrentView('journal')}
+              />
+            </div>
+          ) : currentView === 'chat' ? (
             /* View 1: Gemini Chatbot View */
             <div className="flex-1 min-h-[640px]">
               <GeminiChatbot
@@ -268,8 +296,18 @@ export default function App() {
                 onError={(err) => setErrorState(err)}
               />
             </div>
+          ) : currentView === 'voice' ? (
+            /* View 2: Gemini Live Voice Real-time Audio */
+            <div className="flex-1 min-h-[640px]">
+              <GeminiLiveVoice
+                userId={user.uid}
+                activeEntry={activeEntry}
+                onSaveEntrySuccess={handleSaveSuccess}
+                onError={(err) => setErrorState(err)}
+              />
+            </div>
           ) : currentView === 'images' ? (
-            /* View 2: Visual Reflections Studio */
+            /* View 3: Visual Reflections Studio */
             <div className="flex-1 min-h-[640px]">
               <ImageStudio
                 userId={user.uid}
@@ -279,7 +317,7 @@ export default function App() {
               />
             </div>
           ) : currentView === 'admin' ? (
-            /* View 3: Admin Dashboard */
+            /* View 4: Admin Dashboard */
             <div className="flex-1 min-h-[640px]">
               <AdminDashboard
                 user={user}
@@ -332,6 +370,7 @@ export default function App() {
                     activeEntryId={activeEntry?.id || null}
                     onSelectEntry={handleSelectEntry}
                     onNewEntry={handleNewEntry}
+                    onOpenCalendar={() => setCurrentView('calendar')}
                   />
                 </div>
 
@@ -343,6 +382,7 @@ export default function App() {
                     onSaveSuccess={handleSaveSuccess}
                     onDeleteEntry={handleDeleteEntry}
                     onError={(err) => setErrorState(err)}
+                    onOpenVoiceMode={() => setCurrentView('voice')}
                   />
                 </div>
 
@@ -434,10 +474,48 @@ export default function App() {
               </div>
 
               <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
-                <p className="font-semibold text-amber-400">6. Admin RBAC & SSRF-Protected Webhooks</p>
+                <p className="font-semibold text-amber-400">6. Real-Time Spoken Voice Reflection (gemini-3.8-live / Live API)</p>
+                <ul className="list-disc list-inside space-y-1 text-stone-300">
+                  <li><strong>Step A:</strong> Click the <strong>"Live Voice"</strong> tab in the header or the <strong>"Live Voice Session"</strong> button.</li>
+                  <li><strong>Step B:</strong> Select a companion voice persona (<em>Zephyr</em>, <em>Kore</em>, <em>Puck</em>, <em>Charon</em>, or <em>Fenrir</em>).</li>
+                  <li><strong>Step C:</strong> Click <strong>"Start Voice Reflection"</strong>. Allow microphone access when prompted.</li>
+                  <li><strong>Step D:</strong> Watch the dual audio visualizers: the emerald mic input bar and the pulsating amber Gemini orb responding to volume.</li>
+                  <li><strong>Step E:</strong> Speak naturally. Observe real-time speech transcription appearing turn-by-turn as you speak, followed by natural spoken vocal playback at 24kHz.</li>
+                  <li><strong>Step F:</strong> Test interrupting Gemini while it speaks; observe immediate audio cutoff and conversational responsiveness.</li>
+                  <li><strong>Step G:</strong> Click <strong>"Save as New Journal Entry"</strong> or <strong>"Append to Active Entry"</strong> to synthesize the voice session into a structured reflection.</li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
+                <p className="font-semibold text-amber-400">7. Admin RBAC & SSRF-Protected Webhooks</p>
                 <ul className="list-disc list-inside space-y-1 text-stone-300">
                   <li><strong>Step A:</strong> Click "Admin RBAC" in the header navigation.</li>
                   <li><strong>Step B:</strong> Check system telemetry, fallback ladder health, and SSRF firewall testing suite.</li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
+                <p className="font-semibold text-amber-400">8. Mood-Based History Filtering System</p>
+                <ul className="list-disc list-inside space-y-1 text-stone-300">
+                  <li><strong>Step A:</strong> In the Journal Editor, create reflections with different moods (e.g., <em>Happy</em> 😊, <em>Reflective</em> 🧘, and <em>Stressed</em> 🌪️).</li>
+                  <li><strong>Step B:</strong> Look at the <strong>Journal History</strong> sidebar. Note the mood toggle chips (All, Happy, Reflective, Stressed, etc.) displaying real-time entry counts.</li>
+                  <li><strong>Step C:</strong> Click on <strong>"Happy"</strong>. Verify only Happy reflections are visible and the filter chip is highlighted with a checkmark.</li>
+                  <li><strong>Step D:</strong> Click <strong>"Stressed"</strong> to toggle multiple moods; verify entries matching either Happy OR Stressed appear.</li>
+                  <li><strong>Step E:</strong> Type in the search box to test combined mood filtering and keyword search.</li>
+                  <li><strong>Step F:</strong> Click <strong>"All"</strong> or <strong>"Reset"</strong> to clear the filter and restore all vault reflections.</li>
+                </ul>
+              </div>
+
+              <div className="p-3.5 rounded-xl bg-stone-950 border border-stone-800 space-y-2">
+                <p className="font-semibold text-amber-400">9. Monthly Calendar View & Date Navigation</p>
+                <ul className="list-disc list-inside space-y-1 text-stone-300">
+                  <li><strong>Step A:</strong> Click <strong>"Monthly Calendar"</strong> in the top header navigation or the calendar icon in the Journal History sidebar.</li>
+                  <li><strong>Step B:</strong> Observe the 7-column month grid. Notice each day cell showing reflection count pills, mood emojis, and pinned location indicators.</li>
+                  <li><strong>Step C:</strong> Review the monthly metrics strip at the top: Entries This Month, Active Days count, Month Consistency rate, and Dominant Mood.</li>
+                  <li><strong>Step D:</strong> Click previous (<code>&lt;</code>) and next (<code>&gt;</code>) month buttons to browse earlier or upcoming months, or click <strong>"Today"</strong> to jump back.</li>
+                  <li><strong>Step E:</strong> Click any day cell in the calendar grid. The <strong>Selected Date</strong> panel on the right updates to display all reflections recorded on that day.</li>
+                  <li><strong>Step F:</strong> In the day inspector, click <strong>"Open in Journal Editor"</strong> on any entry card. Verify the app navigates directly into the editor with that reflection loaded for reading, editing, or Gemini AI reflection.</li>
+                  <li><strong>Step G:</strong> Test the <strong>"Highlight Mood"</strong> filter chips in the calendar header to isolate days with specific moods (e.g. <em>Happy</em> or <em>Stressed</em>).</li>
                 </ul>
               </div>
             </div>

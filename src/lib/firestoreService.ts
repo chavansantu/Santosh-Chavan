@@ -12,7 +12,7 @@ import {
   Timestamp,
 } from 'firebase/firestore';
 import { db } from './firebase';
-import { JournalEntry, InteractionMessage, ChatMessage, GeneratedImageRecord } from '../types';
+import { JournalEntry, InteractionMessage, ChatMessage, GeneratedImageRecord, VoiceSessionRecord } from '../types';
 import { cleanPayload } from './sanitize';
 
 /**
@@ -240,5 +240,56 @@ export async function fetchUserGeneratedImages(
     });
   });
   return list;
+}
+
+export async function saveVoiceSession(
+  userId: string,
+  sessionRecord: Omit<VoiceSessionRecord, 'userId'>
+): Promise<VoiceSessionRecord> {
+  if (!userId) throw new Error('User required to save voice reflection session.');
+  const sessionRef = doc(db, 'users', userId, 'voice_sessions', sessionRecord.id);
+  const payload: VoiceSessionRecord = {
+    ...sessionRecord,
+    userId,
+  };
+  const sanitized = cleanPayload(payload);
+  await setDoc(sessionRef, sanitized);
+  return payload;
+}
+
+export async function fetchUserVoiceSessions(
+  userId: string
+): Promise<VoiceSessionRecord[]> {
+  if (!userId) return [];
+  const sessionsRef = collection(db, 'users', userId, 'voice_sessions');
+  const q = query(sessionsRef, orderBy('createdAt', 'desc'), limit(50));
+
+  const snapshot = await getDocs(q);
+  const list: VoiceSessionRecord[] = [];
+  snapshot.forEach((docSnap) => {
+    const data = docSnap.data();
+    list.push({
+      id: docSnap.id,
+      userId,
+      title: data.title || 'Voice Reflection Session',
+      voiceName: data.voiceName || 'Zephyr',
+      modelUsed: data.modelUsed || 'gemini-3.8-live',
+      durationSeconds: data.durationSeconds || 0,
+      transcript: data.transcript || [],
+      summary: data.summary,
+      tags: data.tags || [],
+      createdAt: data.createdAt || Date.now(),
+    });
+  });
+  return list;
+}
+
+export async function deleteVoiceSession(
+  userId: string,
+  sessionId: string
+): Promise<void> {
+  if (!userId || !sessionId) return;
+  const sessionRef = doc(db, 'users', userId, 'voice_sessions', sessionId);
+  await deleteDoc(sessionRef);
 }
 

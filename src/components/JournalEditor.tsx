@@ -18,7 +18,8 @@ import {
   X,
   Globe,
   ExternalLink,
-  Bell
+  Bell,
+  Radio
 } from 'lucide-react';
 import { JournalEntry, SaveErrorState, EntryLocation } from '../types';
 import { saveJournalEntry } from '../lib/firestoreService';
@@ -29,14 +30,17 @@ interface JournalEditorProps {
   onSaveSuccess: (entry: JournalEntry) => void;
   onDeleteEntry: (id: string) => void;
   onError: (err: SaveErrorState) => void;
+  onOpenVoiceMode?: () => void;
 }
 
 const MOODS = [
   { id: 'Reflective', label: 'Reflective', emoji: '🧘' },
+  { id: 'Happy', label: 'Happy', emoji: '😊' },
   { id: 'Grateful', label: 'Grateful', emoji: '✨' },
   { id: 'Energized', label: 'Energized', emoji: '⚡' },
-  { id: 'Challenged', label: 'Challenged', emoji: '🌱' },
   { id: 'Calm', label: 'Calm', emoji: '🌊' },
+  { id: 'Stressed', label: 'Stressed', emoji: '🌪️' },
+  { id: 'Challenged', label: 'Challenged', emoji: '🌱' },
 ];
 
 export function JournalEditor({
@@ -45,6 +49,7 @@ export function JournalEditor({
   onSaveSuccess,
   onDeleteEntry,
   onError,
+  onOpenVoiceMode,
 }: JournalEditorProps) {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -300,6 +305,18 @@ export function JournalEditor({
             >
               <Trash2 className="w-4 h-4" />
               <span className="sr-only">Delete</span>
+            </button>
+          )}
+
+          {onOpenVoiceMode && (
+            <button
+              id="editor-open-voice-btn"
+              onClick={onOpenVoiceMode}
+              className="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-medium bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 border border-amber-500/30 transition-colors cursor-pointer shadow-xs"
+              title="Start a live voice conversation with Gemini 3.8 Live"
+            >
+              <Radio className="w-4 h-4 text-amber-400" />
+              <span className="hidden sm:inline">Live Voice</span>
             </button>
           )}
 

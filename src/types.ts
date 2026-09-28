@@ -136,3 +136,34 @@ export interface SaveErrorState {
   failedPayload?: any;
   retryAction?: () => Promise<void>;
 }
+
+export type GeminiVoiceName = 'Zephyr' | 'Kore' | 'Puck' | 'Charon' | 'Fenrir';
+
+export interface VoiceOption {
+  id: GeminiVoiceName;
+  name: string;
+  gender: string;
+  style: string;
+  description: string;
+}
+
+export interface VoiceTranscriptItem {
+  id: string;
+  speaker: 'user' | 'model';
+  text: string;
+  timestamp: number;
+  isPartial?: boolean;
+}
+
+export interface VoiceSessionRecord {
+  id: string;
+  userId: string;
+  title: string;
+  voiceName: GeminiVoiceName;
+  modelUsed: string;
+  durationSeconds: number;
+  transcript: VoiceTranscriptItem[];
+  summary?: string;
+  tags?: string[];
+  createdAt: number;
+}
